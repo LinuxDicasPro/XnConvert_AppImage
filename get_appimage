@@ -1,0 +1,121 @@
+#!/bin/bash
+#
+# tarball2appimage by LinuxDicasPro
+#
+####################################
+
+
+destdir=~/__APPIMAGE__
+test -e "../_APPIMAGE" && destdir="../_APPIMAGE" # Opcional
+
+
+###########################################
+
+arch="x86_64"
+prg="XnConvert"
+link="https://www.xnview.com/en/xnconvert/"
+
+###########################################
+
+
+for i in {1..35}; { printf '─'; }; printf "\n"
+printf "Search latest version: "
+
+
+########
+
+version="$(grep -Eom1 "([0-9]+[.])+[0-9]+" <(grep -A1 "Download XnConvert" <(links -dump "$link")))"
+
+########
+
+
+printf "\033[1;32m$version\033[m\n"
+for i in {1..35}; { printf '─'; }; printf "\n"
+
+
+test -z "$version" && {
+    echo "update script. version not found!"
+    exit 1
+}
+
+set -e
+
+test ! -e $destdir && mkdir -p $destdir
+cd $destdir
+
+
+test -e "$prg-$version-$arch.AppImage" && {
+    echo "appimage found!"
+    exit 0
+}
+
+
+test ! -e "appimagetool-x86_64.AppImage" && {
+    link_tool="https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage"
+    wget -c -q --show-progress "$link_tool"
+    chmod +x "appimagetool-x86_64.AppImage"
+}
+
+
+#########
+
+link_prg="https://download.xnview.com/XnConvert-linux-x64.tgz"
+
+#########
+
+
+wget -c -q --show-progress "$link_prg"
+file_prg=${link_prg##*/}
+
+cwd=$PWD
+
+rm -rf "$prg.AppDir"
+mkdir -p "$prg.AppDir"
+cd "$prg.AppDir"
+
+echo -e "\nextract $file_prg ..."
+printf "$file_prg\t["
+tar -zxf "$cwd/$file_prg" --checkpoint=500 --checkpoint-action=exec='printf ='
+echo -e "]\n"
+
+cp $prg/xnconvert.png ./$prg.png
+cp $prg/$prg.desktop .
+
+sed -i "s:Icon=.*:Icon=$prg:" $prg.desktop
+
+echo "#!/bin/bash
+
+cd \$APPDIR
+desktopfile=~/.local/share/applications/$prg.desktop
+iconfile=~/.local/share/pixmaps/$prg.png
+
+test ! -e \"\$desktopfile\" && cp $prg.desktop ~/.local/share/applications/
+test ! -e \"\$iconfile\" && cp $prg.png ~/.local/share/pixmaps/
+
+if ! grep -q \"\$APPIMAGE\" \"\$desktopfile\"; then
+    sed -i \"s:Exec=.*:Exec=\$APPIMAGE:\" \"\$desktopfile\"
+    sed -i \"s:Icon=.*:Icon=\$iconfile:\" \"\$desktopfile\"
+    /usr/bin/update-desktop-database -q || true
+    test -e usr/share/icons/hicolor/icon-theme.cache && {
+        test -x /usr/bin/gtk-update-icon-cache && /usr/bin/gtk-update-icon-cache ~/.local/share/pixmaps/ 2>&1 >&- || true
+    }
+fi
+
+cd \$APPDIR/$prg
+./xnconvert.sh" > AppRun
+
+chmod +x AppRun
+cd ..
+
+printf "\n"; for ((i=0; i<$COLUMNS; i++)); { printf '─'; }; echo -e "\n"
+
+env ARCH=$arch ./appimagetool-x86_64.AppImage "$prg.AppDir"
+mv "$prg-$arch.AppImage" "$prg-$version-$arch.AppImage"
+
+printf "\n"; for ((i=0; i<$COLUMNS; i++)); { printf '─'; }; echo -e "\n"
+
+rm -rf "$prg.AppDir"
+cd ..
+
+echo "appimage saved in $destdir/$prg-$version-$arch.AppImage"
+exit 0
